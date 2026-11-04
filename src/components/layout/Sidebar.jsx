@@ -13,7 +13,7 @@ import {
 import { AppContext } from "../../context/AppContext";
 import { ThemeContext } from "../../context/ThemeContext";
 
-function Sidebar() {
+function Sidebar({ isMobileOpen, onClose }) {
   const { currentUser, logout } = useContext(AppContext);
   const { theme, toggleTheme } = useContext(ThemeContext);
   const navigate = useNavigate();
@@ -54,7 +54,16 @@ function Sidebar() {
   };
 
   return (
-    <aside className="w-64 min-h-screen bg-surface border-r border-border flex flex-col p-5">
+    <aside
+      className={`
+        fixed inset-y-0 left-0 z-50
+        w-64 min-h-screen bg-surface border-r border-border
+        flex flex-col p-5
+        transition-transform duration-300
+        lg:static lg:translate-x-0 lg:z-auto
+        ${isMobileOpen ? "translate-x-0" : "-translate-x-full"}
+      `}
+    >
 
       {/* Brand */}
       <div className="flex items-center gap-3 px-2 mb-12">
@@ -84,6 +93,7 @@ function Sidebar() {
               key={item.path}
               to={item.path}
               end
+              onClick={onClose}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors ${
                   isActive

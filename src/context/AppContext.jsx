@@ -3,46 +3,83 @@ import { mockUsers, initialAssignments } from "../data/mockData";
 
 export const AppContext = createContext(null);
 
+function readStorage(key, fallback) {
+  try {
+    const savedData = localStorage.getItem(key);
+
+    if (!savedData) return fallback;
+
+    return JSON.parse(savedData);
+  } catch (error) {
+    console.error(`Failed to read ${key} from localStorage:`, error);
+
+    return fallback;
+  }
+}
+
+function writeStorage(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (error) {
+    console.error(`Failed to save ${key} to localStorage:`, error);
+
+    return false;
+  }
+}
+
+function isValidAssignmentList(data) {
+  return (
+    Array.isArray(data) &&
+    data.every(
+      (assignment) =>
+        assignment &&
+        typeof assignment.id === "string" &&
+        typeof assignment.createdBy === "string" &&
+        Array.isArray(assignment.assignedTo) &&
+        assignment.submissions &&
+        typeof assignment.submissions === "object" &&
+        !Array.isArray(assignment.submissions)
+    )
+  );
+}
+
 export function AppProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => {
-    const savedUser = localStorage.getItem("joineazy-user");
+    const savedUser = readStorage("joineazy-user", null);
 
-    if (!savedUser) return null;
-
-    try {
-      const parsedUser = JSON.parse(savedUser);
-
-      return mockUsers.find((user) => user.id === parsedUser.id) || null;
-    } catch {
+    if (!savedUser || typeof savedUser.id !== "string") {
       return null;
     }
+
+    return mockUsers.find((user) => user.id === savedUser.id) || null;
   });
 
   const [assignments, setAssignments] = useState(() => {
-    const savedAssignments = localStorage.getItem("joineazy-assignments");
+    const savedAssignments = readStorage(
+      "joineazy-assignments",
+      initialAssignments
+    );
 
-    if (!savedAssignments) return initialAssignments;
-
-    try {
-      return JSON.parse(savedAssignments);
-    } catch {
-      return initialAssignments;
-    }
+    return isValidAssignmentList(savedAssignments)
+      ? savedAssignments
+      : initialAssignments;
   });
 
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem("joineazy-user", JSON.stringify(currentUser));
+      writeStorage("joineazy-user", currentUser);
     } else {
-      localStorage.removeItem("joineazy-user");
+      try {
+        localStorage.removeItem("joineazy-user");
+      } catch (error) {
+        console.error("Failed to remove saved user:", error);
+      }
     }
   }, [currentUser]);
 
   useEffect(() => {
-    localStorage.setItem(
-      "joineazy-assignments",
-      JSON.stringify(assignments)
-    );
+    writeStorage("joineazy-assignments", assignments);
   }, [assignments]);
 
   const login = (userId) => {

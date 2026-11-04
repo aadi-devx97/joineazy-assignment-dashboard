@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, AlertCircle, CheckCircle2 } from "lucide-react";
+import { X, AlertCircle, } from "lucide-react";
 
 function SubmissionModal({ isOpen, onClose, onConfirm, assignmentTitle }) {
   const [confirmed, setConfirmed] = useState(false);

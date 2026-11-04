@@ -19,6 +19,7 @@ function AssignmentModal({
   });
 
   const [selectedStudents, setSelectedStudents] = useState([]);
+  const [formError, setFormError] = useState("");
 
   useEffect(() => {
     if (!isOpen) return;
@@ -55,6 +56,8 @@ function AssignmentModal({
   if (!isOpen) return null;
 
   const handleChange = (e) => {
+    setFormError("");
+
     const { name, value } = e.target;
 
     setFormData((previous) => ({
@@ -64,6 +67,8 @@ function AssignmentModal({
   };
 
   const toggleStudent = (studentId) => {
+    setFormError("");
+
     setSelectedStudents((previous) =>
       previous.includes(studentId)
         ? previous.filter((id) => id !== studentId)
@@ -78,9 +83,11 @@ function AssignmentModal({
       formData.assignedTo === "selected" &&
       selectedStudents.length === 0
     ) {
-      alert("Please select at least one student.");
+      setFormError("Please select at least one student.");
       return;
     }
+
+    setFormError("");
 
     onSave({
       ...formData,
@@ -244,7 +251,13 @@ function AssignmentModal({
                     <span>{student.name}</span>
                   </label>
                 ))}
-              </div>
+              </div>     
+            )}
+
+            {formError && (
+              <p className="mt-2 text-sm text-red-600" role="alert">
+              {formError}
+              </p>
             )}
           </div>
 

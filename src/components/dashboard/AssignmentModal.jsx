@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+
+import { useState } from "react";
 import { X, Users, CalendarDays, Link as LinkIcon } from "lucide-react";
 import { mockUsers } from "../../data/mockData";
 
@@ -10,48 +11,29 @@ function AssignmentModal({
 }) {
   const students = mockUsers.filter((user) => user.role === "student");
 
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    dueDate: "",
-    driveLink: "",
-    assignedTo: "all",
-  });
+  const [formData, setFormData] = useState(() =>
+    editingAssignment
+      ? {
+          title: editingAssignment.title,
+          description: editingAssignment.description,
+          dueDate: editingAssignment.dueDate,
+          driveLink: editingAssignment.driveLink,
+          assignedTo: "selected",
+        }
+      : {
+          title: "",
+          description: "",
+          dueDate: "",
+          driveLink: "",
+          assignedTo: "all",
+        }
+  );
 
-  const [selectedStudents, setSelectedStudents] = useState([]);
+  const [selectedStudents, setSelectedStudents] = useState(
+    () => editingAssignment?.assignedTo || []
+  );
+
   const [formError, setFormError] = useState("");
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    if (editingAssignment) {
-      setFormData({
-        title: editingAssignment.title,
-        description: editingAssignment.description,
-        dueDate: editingAssignment.dueDate,
-        driveLink: editingAssignment.driveLink,
-        assignedTo: Array.isArray(editingAssignment.assignedTo)
-          ? "selected"
-          : "all",
-      });
-
-      setSelectedStudents(
-        Array.isArray(editingAssignment.assignedTo)
-          ? editingAssignment.assignedTo
-          : []
-      );
-    } else {
-      setFormData({
-        title: "",
-        description: "",
-        dueDate: "",
-        driveLink: "",
-        assignedTo: "all",
-      });
-
-      setSelectedStudents([]);
-    }
-  }, [isOpen, editingAssignment]);
 
   if (!isOpen) return null;
 
@@ -251,12 +233,12 @@ function AssignmentModal({
                     <span>{student.name}</span>
                   </label>
                 ))}
-              </div>     
+              </div>
             )}
 
             {formError && (
               <p className="mt-2 text-sm text-red-600" role="alert">
-              {formError}
+                {formError}
               </p>
             )}
           </div>

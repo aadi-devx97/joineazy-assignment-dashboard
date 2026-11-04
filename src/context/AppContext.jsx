@@ -1,7 +1,7 @@
-import { createContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { mockUsers, initialAssignments } from "../data/mockData";
 
-export const AppContext = createContext(null);
+import { AppContext } from "./AppContextDefinition";
 
 function readStorage(key, fallback) {
   try {

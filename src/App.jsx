@@ -6,7 +6,7 @@ import {
   Routes,
 } from "react-router-dom";
 
-import { AppContext } from "./context/AppContext";
+import { AppContext } from "./context/AppContextDefinition";
 import LoginPage from "./pages/LoginPage";
 import AdminDashboard from "./pages/AdminDashboard";
 import StudentDashboard from "./pages/StudentDashboard";

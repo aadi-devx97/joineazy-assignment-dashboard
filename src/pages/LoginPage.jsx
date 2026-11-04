@@ -2,7 +2,7 @@ import { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, GraduationCap, ShieldCheck } from "lucide-react";
 
-import { AppContext } from "../context/AppContext";
+import { AppContext } from "../context/AppContextDefinition";
 import { mockUsers } from "../data/mockData";
 
 function LoginPage() {

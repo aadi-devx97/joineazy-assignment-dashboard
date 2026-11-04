@@ -10,7 +10,7 @@ import {
 
 import DashboardLayout from "../components/layout/DashboardLayout";
 import AssignmentModal from "../components/dashboard/AssignmentModal";
-import { AppContext } from "../context/AppContext";
+import { AppContext } from "../context/AppContextDefinition";
 import { mockUsers } from "../data/mockData";
 
 function AssignmentsPage() {
@@ -354,15 +354,18 @@ function AssignmentsPage() {
         )}
       </section>
 
-      <AssignmentModal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingAssignment(null);
-        }}
+      {isModalOpen && (
+        <AssignmentModal
+          key={editingAssignment?.id || "new"}
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false);
+            setEditingAssignment(null);
+          }}
         onSave={handleSave}
         editingAssignment={editingAssignment}
-      />
+        />
+      )}
     </DashboardLayout>
   );
 }

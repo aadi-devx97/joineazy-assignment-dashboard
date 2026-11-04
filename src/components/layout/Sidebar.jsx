@@ -10,8 +10,8 @@ import {
   Sun,
 } from "lucide-react";
 
-import { AppContext } from "../../context/AppContext";
-import { ThemeContext } from "../../context/ThemeContext";
+import { AppContext } from "../../context/AppContextDefinition";
+import { ThemeContext } from "../../context/ThemeContextDefinition";
 
 function Sidebar({ isMobileOpen, onClose }) {
   const { currentUser, logout } = useContext(AppContext);

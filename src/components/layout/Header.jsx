@@ -1,7 +1,6 @@
 import { useContext } from "react";
 import { Bell, CalendarDays } from "lucide-react";
-import { AppContext } from "../../context/AppContext";
-
+import { AppContext } from "../../context/AppContextDefinition";
 function Header({ title, description }) {
   const { currentUser } = useContext(AppContext);
 

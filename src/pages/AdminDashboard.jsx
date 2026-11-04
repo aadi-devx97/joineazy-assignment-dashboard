@@ -12,7 +12,7 @@ import {
 
 import DashboardLayout from "../components/layout/DashboardLayout";
 import AssignmentModal from "../components/dashboard/AssignmentModal";
-import { AppContext } from "../context/AppContext";
+import { AppContext } from "../context/AppContextDefinition";
 import { mockUsers } from "../data/mockData";
 
 function AdminDashboard() {
@@ -74,19 +74,16 @@ function AdminDashboard() {
     },
   ];
 
-  // Open modal for creating
   const handleCreate = () => {
     setEditingAssignment(null);
     setIsModalOpen(true);
   };
 
-  // Open modal for editing
   const handleEdit = (assignment) => {
     setEditingAssignment(assignment);
     setIsModalOpen(true);
   };
 
-  // Save new or edited assignment
   const handleSave = (formData) => {
     if (editingAssignment) {
       setAssignments((previous) =>
@@ -383,15 +380,18 @@ function AdminDashboard() {
       </section>
 
       {/* Assignment modal */}
-      <AssignmentModal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingAssignment(null);
-        }}
-        onSave={handleSave}
-        editingAssignment={editingAssignment}
-      />
+      {isModalOpen && (
+        <AssignmentModal
+            key={editingAssignment?.id || "new"}
+            isOpen={isModalOpen}
+            onClose={() => {
+            setIsModalOpen(false);
+            setEditingAssignment(null);
+            }}
+            onSave={handleSave}
+            editingAssignment={editingAssignment}
+        />
+      )}
     </DashboardLayout>
   );
 }

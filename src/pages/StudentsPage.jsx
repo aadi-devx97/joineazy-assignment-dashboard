@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 
 import DashboardLayout from "../components/layout/DashboardLayout";
-import { AppContext } from "../context/AppContext";
+import { AppContext } from "../context/AppContextDefinition";
 import { mockUsers } from "../data/mockData";
 
 function StudentsPage() {

@@ -9,7 +9,7 @@ import {
 
 import DashboardLayout from "../components/layout/DashboardLayout";
 import SubmissionModal from "../components/dashboard/SubmissionModal";
-import { AppContext } from "../context/AppContext";
+import { AppContext } from "../context/AppContextDefinition";
 
 function MyAssignmentsPage() {
   const { currentUser, assignments, setAssignments } =

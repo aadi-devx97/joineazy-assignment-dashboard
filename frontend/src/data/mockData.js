@@ -1,15 +1,16 @@
+
 export const mockUsers = [
   {
-    id: "admin-1",
+    id: "professor-1",
     name: "Alex Morgan",
     email: "alex@joineazy.com",
-    role: "admin",
+    role: "professor",
   },
   {
-    id: "admin-2",
+    id: "professor-2",
     name: "Sarah Chen",
     email: "sarah@joineazy.com",
-    role: "admin",
+    role: "professor",
   },
   {
     id: "student-1",
@@ -43,4 +44,40 @@ export const mockUsers = [
   },
 ];
 
+export const mockCourses = [
+  {
+    id: "course-1",
+    title: "Full Stack Web Development",
+    code: "FSWD-101",
+    description:
+      "Learn modern frontend and backend development through practical assignments.",
+    professorId: "professor-1",
+    studentIds: [
+      "student-1",
+      "student-2",
+      "student-3",
+    ],
+    createdAt: "2026-11-01T09:00:00.000Z",
+  },
+  {
+    id: "course-2",
+    title: "Artificial Intelligence Fundamentals",
+    code: "AIF-201",
+    description:
+      "Explore artificial intelligence concepts, applications and practical implementations.",
+    professorId: "professor-2",
+    studentIds: [
+      "student-2",
+      "student-3",
+      "student-4",
+      "student-5",
+    ],
+    createdAt: "2026-11-02T09:00:00.000Z",
+  },
+];
+
 export const initialAssignments = [];
+
+export const initialGroups = [];
+
+export const initialRegistrations = [];

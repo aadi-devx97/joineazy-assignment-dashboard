@@ -1,3 +1,4 @@
+
 import { useContext } from "react";
 import {
   BrowserRouter,
@@ -7,6 +8,7 @@ import {
 } from "react-router-dom";
 
 import { AppContext } from "./context/AppContextDefinition";
+
 import LoginPage from "./pages/LoginPage";
 import AdminDashboard from "./pages/AdminDashboard";
 import StudentDashboard from "./pages/StudentDashboard";
@@ -14,6 +16,7 @@ import StudentsPage from "./pages/StudentsPage";
 import AssignmentsPage from "./pages/AssignmentsPage";
 import MyAssignmentsPage from "./pages/MyAssignmentsPage";
 
+// Protect routes according to the user's role.
 function ProtectedRoute({ allowedRole, children }) {
   const { currentUser } = useContext(AppContext);
 
@@ -24,7 +27,7 @@ function ProtectedRoute({ allowedRole, children }) {
   if (currentUser.role !== allowedRole) {
     return (
       <Navigate
-        to={currentUser.role === "admin" ? "/admin" : "/student"}
+        to={currentUser.role === "professor" ? "/professor" : "/student"}
         replace
       />
     );
@@ -36,36 +39,68 @@ function ProtectedRoute({ allowedRole, children }) {
 function App() {
   const { currentUser } = useContext(AppContext);
 
+  const dashboardPath = currentUser
+    ? currentUser.role === "professor"
+      ? "/professor"
+      : "/student"
+    : "/login";
+
   return (
     <BrowserRouter>
       <Routes>
+        {/* Default route */}
         <Route
           path="/"
-          element={
-            <Navigate
-              to={
-                currentUser
-                  ? currentUser.role === "admin"
-                    ? "/admin"
-                    : "/student"
-                  : "/login"
-              }
-              replace
-            />
-          }
+          element={<Navigate to={dashboardPath} replace />}
         />
 
+        {/* Login */}
         <Route
           path="/login"
           element={
             currentUser ? (
-              <Navigate
-                to={currentUser.role === "admin" ? "/admin" : "/student"}
-                replace
-              />
+              <Navigate to={dashboardPath} replace />
             ) : (
               <LoginPage />
             )
+          }
+        />
+
+        {/* Professor routes */}
+        <Route
+          path="/professor"
+          element={
+            <ProtectedRoute allowedRole="professor">
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/professor/assignments"
+          element={
+            <ProtectedRoute allowedRole="professor">
+              <AssignmentsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/professor/students"
+          element={
+            <ProtectedRoute allowedRole="professor">
+              <StudentsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Student routes */}
+        <Route
+          path="/student"
+          element={
+            <ProtectedRoute allowedRole="student">
+              <StudentDashboard />
+            </ProtectedRoute>
           }
         />
 
@@ -78,43 +113,11 @@ function App() {
           }
         />
 
+        {/* Unknown routes */}
         <Route
-          path="/admin/assignments"
-          element={
-            <ProtectedRoute allowedRole="admin">
-              <AssignmentsPage />
-            </ProtectedRoute>
-          }
+          path="*"
+          element={<Navigate to="/" replace />}
         />
-
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute allowedRole="admin">
-              <AdminDashboard />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/admin/students"
-          element={
-            <ProtectedRoute allowedRole="admin">
-              <StudentsPage />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/student"
-          element={
-            <ProtectedRoute allowedRole="student">
-              <StudentDashboard />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

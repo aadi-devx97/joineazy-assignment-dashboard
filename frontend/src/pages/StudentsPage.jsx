@@ -1,4 +1,5 @@
-import { useContext } from "react";
+
+import { useContext, useMemo } from "react";
 import {
   Users,
   CheckCircle2,
@@ -8,58 +9,122 @@ import {
 
 import DashboardLayout from "../components/layout/DashboardLayout";
 import { AppContext } from "../context/AppContextDefinition";
-import { mockUsers } from "../data/mockData";
 
 function StudentsPage() {
-  const { currentUser, assignments } = useContext(AppContext);
+  const {
+    currentUser,
+    users,
+    courses,
+    assignments,
+    groups,
+  } = useContext(AppContext);
 
-  const students = mockUsers.filter(
-    (user) => user.role === "student"
+  // Courses taught by the logged-in professor.
+  const professorCourses = useMemo(
+    () =>
+      courses.filter(
+        (course) => course.professorId === currentUser.id
+      ),
+    [courses, currentUser]
   );
 
-  // Only assignments created by the logged-in admin
-  const myAssignments = assignments.filter(
-    (assignment) => assignment.createdBy === currentUser.id
+  const courseIds = professorCourses.map(
+    (course) => course.id
   );
 
-  const studentProgress = students.map((student) => {
-    // Only count assignments assigned to this student
-    const assignedAssignments = myAssignments.filter(
-      (assignment) => assignment.assignedTo?.includes(student.id)
+  // Only students enrolled in the professor's courses.
+  const students = useMemo(() => {
+    const enrolledStudentIds = new Set(
+      professorCourses.flatMap(
+        (course) => course.studentIds || []
+      )
     );
 
-    const submitted = assignedAssignments.filter(
+    return users.filter(
+      (user) =>
+        user.role === "student" &&
+        enrolledStudentIds.has(user.id)
+    );
+  }, [users, professorCourses]);
+
+  // Assignments belonging to the professor's courses.
+  const professorAssignments = useMemo(
+    () =>
+      assignments.filter((assignment) =>
+        courseIds.includes(assignment.courseId)
+      ),
+    [assignments, courseIds]
+  );
+
+  const getStudentProgress = (student) => {
+    const enrolledCourseIds = professorCourses
+      .filter((course) =>
+        course.studentIds?.includes(student.id)
+      )
+      .map((course) => course.id);
+
+    const applicableAssignments = professorAssignments.filter(
       (assignment) =>
-        assignment.submissions?.[student.id]?.status === "submitted"
-    ).length;
+        enrolledCourseIds.includes(assignment.courseId)
+    );
 
-    const pending = assignedAssignments.length - submitted;
+    let acknowledged = 0;
 
-    const percentage =
-      assignedAssignments.length > 0
-        ? Math.round((submitted / assignedAssignments.length) * 100)
-        : 0;
+    applicableAssignments.forEach((assignment) => {
+      const acknowledgements =
+        assignment.acknowledgements || {};
+
+      if (assignment.submissionType === "group") {
+        const group = groups.find(
+          (item) =>
+            item.courseId === assignment.courseId &&
+            item.members?.includes(student.id)
+        );
+
+        if (
+          group &&
+          acknowledgements[group.id]?.acknowledged
+        ) {
+          acknowledged += 1;
+        }
+      } else if (
+        acknowledgements[student.id]?.acknowledged
+      ) {
+        acknowledged += 1;
+      }
+    });
+
+    const total = applicableAssignments.length;
+    const pending = total - acknowledged;
+
+    const percentage = total
+      ? Math.round((acknowledged / total) * 100)
+      : 0;
 
     return {
-      ...student,
-      total: assignedAssignments.length,
-      submitted,
+      total,
+      acknowledged,
       pending,
       percentage,
     };
-  });
+  };
+
+  const studentProgress = students.map((student) => ({
+    ...student,
+    ...getStudentProgress(student),
+  }));
 
   const totalAssigned = studentProgress.reduce(
     (total, student) => total + student.total,
     0
   );
 
-  const totalSubmitted = studentProgress.reduce(
-    (total, student) => total + student.submitted,
+  const totalAcknowledged = studentProgress.reduce(
+    (total, student) => total + student.acknowledged,
     0
   );
 
-  const totalPending = totalAssigned - totalSubmitted;
+  const totalPending = totalAssigned - totalAcknowledged;
 
   const summary = [
     {
@@ -73,8 +138,8 @@ function StudentsPage() {
       icon: ClipboardList,
     },
     {
-      label: "Submitted",
-      value: totalSubmitted,
+      label: "Acknowledged",
+      value: totalAcknowledged,
       icon: CheckCircle2,
     },
     {
@@ -87,7 +152,7 @@ function StudentsPage() {
   return (
     <DashboardLayout
       title="Students"
-      description="Monitor individual student performance and assignment progress."
+      description="Monitor student acknowledgement progress across your courses."
     >
       {/* Summary */}
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
@@ -100,14 +165,18 @@ function StudentsPage() {
               className="bg-surface border border-border rounded-xl p-5"
             >
               <div className="flex items-center justify-between mb-5">
-                <p className="text-sm text-muted">{item.label}</p>
+                <p className="text-sm text-muted">
+                  {item.label}
+                </p>
 
                 <div className="w-9 h-9 flex items-center justify-center bg-olive/10 text-olive rounded-lg">
                   <Icon size={19} />
                 </div>
               </div>
 
-              <p className="text-3xl font-semibold">{item.value}</p>
+              <p className="text-3xl font-semibold">
+                {item.value}
+              </p>
             </div>
           );
         })}
@@ -116,75 +185,109 @@ function StudentsPage() {
       {/* Student list */}
       <section className="bg-surface border border-border rounded-xl overflow-hidden">
         <div className="p-5 border-b border-border">
-          <h3 className="text-lg font-semibold">Student Overview</h3>
+          <h3 className="text-lg font-semibold">
+            Student Overview
+          </h3>
 
           <p className="text-sm text-muted mt-1">
-            Individual assignment completion and submission status.
+            Individual student acknowledgement and assignment progress.
           </p>
         </div>
 
-        <div className="divide-y divide-border">
-          {studentProgress.map((student) => (
-            <article
-              key={student.id}
-              className="p-5 flex flex-col lg:flex-row lg:items-center gap-5"
-            >
-              {/* Student identity */}
-              <div className="flex items-center gap-3 lg:w-1/4">
-                <div className="w-11 h-11 rounded-full bg-terracotta/15 text-terracotta flex items-center justify-center font-semibold">
-                  {student.name.charAt(0)}
+        {studentProgress.length === 0 ? (
+          <div className="py-16 px-5 text-center">
+            <Users
+              size={35}
+              className="mx-auto text-muted mb-4"
+            />
+
+            <h4 className="font-semibold">
+              No students enrolled
+            </h4>
+
+            <p className="text-sm text-muted mt-2">
+              Students enrolled in your courses will appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {studentProgress.map((student) => (
+              <article
+                key={student.id}
+                className="p-5 flex flex-col lg:flex-row lg:items-center gap-5"
+              >
+                {/* Student identity */}
+                <div className="flex items-center gap-3 lg:w-1/4">
+                  <div className="w-11 h-11 rounded-full bg-terracotta/15 text-terracotta flex items-center justify-center font-semibold">
+                    {student.name.charAt(0)}
+                  </div>
+
+                  <div className="min-w-0">
+                    <h4 className="font-semibold">
+                      {student.name}
+                    </h4>
+
+                    <p className="text-xs text-muted truncate">
+                      {student.email}
+                    </p>
+                  </div>
                 </div>
 
-                <div>
-                  <h4 className="font-semibold">{student.name}</h4>
-                  <p className="text-xs text-muted">{student.email}</p>
-                </div>
-              </div>
+                {/* Assignment statistics */}
+                <div className="flex items-center gap-6 lg:w-1/4">
+                  <div>
+                    <p className="text-xs text-muted">
+                      Assigned
+                    </p>
+                    <p className="font-semibold mt-1">
+                      {student.total}
+                    </p>
+                  </div>
 
-              {/* Assignment statistics */}
-              <div className="flex items-center gap-6 lg:w-1/4">
-                <div>
-                  <p className="text-xs text-muted">Assigned</p>
-                  <p className="font-semibold mt-1">{student.total}</p>
-                </div>
+                  <div>
+                    <p className="text-xs text-muted">
+                      Acknowledged
+                    </p>
+                    <p className="font-semibold text-olive mt-1">
+                      {student.acknowledged}
+                    </p>
+                  </div>
 
-                <div>
-                  <p className="text-xs text-muted">Submitted</p>
-                  <p className="font-semibold text-olive mt-1">
-                    {student.submitted}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs text-muted">Pending</p>
-                  <p className="font-semibold text-terracotta mt-1">
-                    {student.pending}
-                  </p>
-                </div>
-              </div>
-
-              {/* Progress */}
-              <div className="flex-1">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs text-muted">
-                    Completion progress
-                  </span>
-
-                  <span className="text-sm font-medium">
-                    {student.percentage}%
-                  </span>
+                  <div>
+                    <p className="text-xs text-muted">
+                      Pending
+                    </p>
+                    <p className="font-semibold text-terracotta mt-1">
+                      {student.pending}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="h-2 bg-border rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-olive rounded-full transition-all"
-                    style={{ width: `${student.percentage}%` }}
-                  />
+                {/* Progress */}
+                <div className="flex-1">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs text-muted">
+                      Acknowledgement progress
+                    </span>
+
+                    <span className="text-sm font-medium">
+                      {student.percentage}%
+                    </span>
+                  </div>
+
+                  <div className="h-2 bg-border rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-olive rounded-full transition-all"
+                      style={{
+                        width: `${student.percentage}%`,
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
-            </article>
-          ))}
-        </div>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
     </DashboardLayout>
   );

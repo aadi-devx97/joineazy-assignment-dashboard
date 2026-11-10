@@ -1,96 +1,197 @@
+
 import { useContext, useMemo, useState } from "react";
 import {
-  Search,
   ClipboardList,
   ExternalLink,
   CheckCircle2,
   Clock,
+  Users,
+  User,
+  CalendarDays,
 } from "lucide-react";
 
 import DashboardLayout from "../components/layout/DashboardLayout";
-import SubmissionModal from "../components/dashboard/SubmissionModal";
 import { AppContext } from "../context/AppContextDefinition";
 
+function formatDeadline(value) {
+  if (!value) return "No deadline";
+
+  return new Date(value).toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function formatAcknowledgement(value) {
+  if (!value) return "";
+
+  return new Date(value).toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
 function MyAssignmentsPage() {
-  const { currentUser, assignments, setAssignments } =
-    useContext(AppContext);
+  const {
+    currentUser,
+    courses,
+    assignments,
+    setAssignments,
+    groups,
+    users,
+  } = useContext(AppContext);
 
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [sortOrder, setSortOrder] = useState("nearest");
-  const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [success, setSuccess] = useState("");
+  const [error, setError] = useState("");
 
-  // Only assignments assigned to the logged-in student
-  const myAssignments = assignments.filter(
-    (assignment) => assignment.assignedTo?.includes(currentUser.id)
+  const enrolledCourses = useMemo(
+    () =>
+      courses.filter((course) =>
+        course.studentIds?.includes(currentUser?.id)
+      ),
+    [courses, currentUser]
   );
 
-  const filteredAssignments = useMemo(() => {
-    let result = [...myAssignments];
+  const courseIds = enrolledCourses.map((course) => course.id);
 
-    if (search.trim()) {
-      result = result.filter((assignment) =>
-        assignment.title.toLowerCase().includes(search.toLowerCase())
-      );
+  const myAssignments = useMemo(
+    () =>
+      assignments
+        .filter((assignment) =>
+          courseIds.includes(assignment.courseId)
+        )
+        .sort(
+          (a, b) =>
+            new Date(a.deadline) - new Date(b.deadline)
+        ),
+    [assignments, courseIds]
+  );
+
+  const getCourse = (courseId) =>
+    courses.find((course) => course.id === courseId);
+
+  const getMyGroup = (courseId) =>
+    groups.find(
+      (group) =>
+        group.courseId === courseId &&
+        group.members?.includes(currentUser.id)
+    );
+
+  const getUserName = (userId) =>
+    users.find((user) => user.id === userId)?.name ||
+    "Unknown student";
+
+  const getAcknowledgementInfo = (assignment) => {
+    const acknowledgements = assignment.acknowledgements || {};
+
+    if (assignment.submissionType === "individual") {
+      const acknowledgement = acknowledgements[currentUser.id];
+
+      return {
+        acknowledged: Boolean(acknowledgement?.acknowledged),
+        acknowledgedAt: acknowledgement?.acknowledgedAt,
+        canAcknowledge: !acknowledgement?.acknowledged,
+        message: acknowledgement?.acknowledged
+          ? "You acknowledged this assignment."
+          : "You haven't acknowledged this assignment yet.",
+      };
     }
 
-    if (statusFilter !== "all") {
-      result = result.filter((assignment) => {
-        const isSubmitted =
-          assignment.submissions?.[currentUser.id]?.status === "submitted";
+    const group = getMyGroup(assignment.courseId);
 
-        return statusFilter === "submitted"
-          ? isSubmitted
-          : !isSubmitted;
-      });
+    if (!group) {
+      return {
+        group: null,
+        acknowledged: false,
+        canAcknowledge: false,
+        message: "Create or join a group to participate.",
+      };
     }
 
-    result.sort((a, b) => {
-      const dateA = new Date(a.dueDate);
-      const dateB = new Date(b.dueDate);
+    const acknowledgement = acknowledgements[group.id];
+    const isLeader = group.leaderId === currentUser.id;
 
-      return sortOrder === "nearest"
-        ? dateA - dateB
-        : dateB - dateA;
-    });
+    return {
+      group,
+      acknowledged: Boolean(acknowledgement?.acknowledged),
+      acknowledgedAt: acknowledgement?.acknowledgedAt,
+      canAcknowledge:
+        isLeader && !acknowledgement?.acknowledged,
+      isLeader,
+      leaderName: getUserName(group.leaderId),
+      message: acknowledgement?.acknowledged
+        ? `${getUserName(group.leaderId)} acknowledged this assignment.`
+        : isLeader
+          ? "You are the group leader. You can acknowledge this assignment."
+          : `Waiting for ${getUserName(group.leaderId)} to acknowledge.`,
+    };
+  };
 
-    return result;
-  }, [myAssignments, search, statusFilter, sortOrder, currentUser.id]);
+  const handleAcknowledge = (assignment) => {
+    setSuccess("");
+    setError("");
 
-  const submittedCount = myAssignments.filter(
-    (assignment) =>
-      assignment.submissions?.[currentUser.id]?.status === "submitted"
-  ).length;
+    const group =
+      assignment.submissionType === "group"
+        ? getMyGroup(assignment.courseId)
+        : null;
 
-  const pendingCount = myAssignments.length - submittedCount;
+    if (
+      assignment.submissionType === "group" &&
+      (!group || group.leaderId !== currentUser.id)
+    ) {
+      setError("Only your group leader can acknowledge this assignment.");
+      return;
+    }
 
-  const handleSubmission = () => {
-    if (!selectedAssignment) return;
+    const acknowledgementKey =
+      assignment.submissionType === "group"
+        ? group.id
+        : currentUser.id;
+
+    const existingAcknowledgement =
+      assignment.acknowledgements?.[acknowledgementKey];
+
+    if (existingAcknowledgement?.acknowledged) {
+      setError("This assignment has already been acknowledged.");
+      return;
+    }
 
     setAssignments((previous) =>
-      previous.map((assignment) => {
-        if (assignment.id !== selectedAssignment.id) return assignment;
+      previous.map((item) => {
+        if (item.id !== assignment.id) return item;
 
         return {
-          ...assignment,
-          submissions: {
-            ...assignment.submissions,
-            [currentUser.id]: {
-              status: "submitted",
-              submittedAt: new Date().toISOString(),
+          ...item,
+          acknowledgements: {
+            ...(item.acknowledgements || {}),
+            [acknowledgementKey]: {
+              acknowledged: true,
+              acknowledgedBy: currentUser.id,
+              acknowledgedAt: new Date().toISOString(),
             },
           },
         };
       })
     );
 
-    setSelectedAssignment(null);
+    setSuccess(
+      assignment.submissionType === "group"
+        ? "Your group has acknowledged the assignment."
+        : "Assignment acknowledged successfully."
+    );
   };
+
+  const acknowledgedCount = myAssignments.filter((assignment) =>
+    getAcknowledgementInfo(assignment).acknowledged
+  ).length;
+
+  const pendingCount = myAssignments.length - acknowledgedCount;
 
   return (
     <DashboardLayout
       title="My Assignments"
-      description="View your tasks, manage deadlines and track submissions."
+      description="Review your coursework, deadlines and acknowledgement status."
     >
       {/* Summary */}
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-7">
@@ -101,8 +202,8 @@ function MyAssignmentsPage() {
             icon: ClipboardList,
           },
           {
-            label: "Submitted",
-            value: submittedCount,
+            label: "Acknowledged",
+            value: acknowledgedCount,
             icon: CheckCircle2,
           },
           {
@@ -123,62 +224,45 @@ function MyAssignmentsPage() {
                 <Icon size={20} className="text-olive" />
               </div>
 
-              <p className="text-3xl font-semibold">{item.value}</p>
+              <p className="text-3xl font-semibold">
+                {item.value}
+              </p>
             </div>
           );
         })}
       </section>
 
-      {/* Search and filters */}
-      <section className="bg-surface border border-border rounded-xl p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="relative">
-            <Search
-              size={18}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"
-            />
-
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search assignments..."
-              className="w-full bg-canvas border border-border rounded-lg pl-10 pr-4 py-3 text-sm outline-none focus:border-olive"
-            />
-          </div>
-
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-canvas border border-border rounded-lg px-4 py-3 text-sm outline-none focus:border-olive"
-          >
-            <option value="all">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="submitted">Submitted</option>
-          </select>
-
-          <select
-            value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value)}
-            className="bg-canvas border border-border rounded-lg px-4 py-3 text-sm outline-none focus:border-olive"
-          >
-            <option value="nearest">Nearest due date</option>
-            <option value="farthest">Farthest due date</option>
-          </select>
+      {success && (
+        <div
+          className="mb-5 p-4 rounded-lg bg-olive/10 text-olive text-sm"
+          role="status"
+        >
+          {success}
         </div>
-      </section>
+      )}
+
+      {error && (
+        <div
+          className="mb-5 p-4 rounded-lg bg-terracotta/10 text-terracotta text-sm"
+          role="alert"
+        >
+          {error}
+        </div>
+      )}
 
       {/* Assignment list */}
       <section className="bg-surface border border-border rounded-xl overflow-hidden">
         <div className="p-5 border-b border-border">
-          <h3 className="font-semibold text-lg">Your Assignments</h3>
+          <h3 className="font-semibold text-lg">
+            Your Assignments
+          </h3>
 
           <p className="text-sm text-muted mt-1">
-            {filteredAssignments.length} assignments found.
+            {myAssignments.length} assignments found.
           </p>
         </div>
 
-        {filteredAssignments.length === 0 ? (
+        {myAssignments.length === 0 ? (
           <div className="py-16 px-5 text-center">
             <ClipboardList
               size={35}
@@ -186,66 +270,111 @@ function MyAssignmentsPage() {
             />
 
             <h4 className="font-semibold">
-              {search || statusFilter !== "all"
-                ? "No matching assignments"
-                : "No assignments yet"}
+              No assignments yet
             </h4>
 
             <p className="text-sm text-muted mt-2">
-              {search || statusFilter !== "all"
-                ? "Try changing your search or filters."
-                : "Your assigned tasks will appear here."}
+              Assignments from your enrolled courses will appear here.
             </p>
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {filteredAssignments.map((assignment) => {
-              const isSubmitted =
-                assignment.submissions?.[currentUser.id]?.status === "submitted";
+            {myAssignments.map((assignment) => {
+              const course = getCourse(assignment.courseId);
+              const status = getAcknowledgementInfo(assignment);
 
               const isOverdue =
-                new Date(`${assignment.dueDate}T23:59:59`) < new Date() &&
-                !isSubmitted;
+                new Date(assignment.deadline) < new Date();
+
+              const isGroup =
+                assignment.submissionType === "group";
 
               return (
-                <article key={assignment.id} className="p-5">
-                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                    <div className="min-w-0">
-                      <h4 className="font-semibold">
+                <article
+                  key={assignment.id}
+                  className="p-5"
+                >
+                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-olive mb-2">
+                        {course?.title || course?.name || "Course"}
+                      </p>
+
+                      <h4 className="font-semibold text-lg">
                         {assignment.title}
                       </h4>
 
-                      <p className="text-sm text-muted mt-1">
+                      <p className="text-sm text-muted mt-2">
                         {assignment.description}
                       </p>
 
-                      <div className="flex flex-wrap items-center gap-3 mt-3 text-xs">
-                        <span className="text-muted">
-                          Due: {assignment.dueDate}
+                      <div className="flex flex-wrap items-center gap-4 mt-4 text-xs text-muted">
+                        <span className="inline-flex items-center gap-2">
+                          <CalendarDays size={15} />
+                          {formatDeadline(assignment.deadline)}
+                        </span>
+
+                        <span className="inline-flex items-center gap-2">
+                          {isGroup ? (
+                            <Users size={15} />
+                          ) : (
+                            <User size={15} />
+                          )}
+
+                          {isGroup ? "Group" : "Individual"}
                         </span>
 
                         {isOverdue && (
-                          <span className="text-terracotta font-medium">
-                            Overdue
+                          <span className="text-terracotta font-semibold">
+                            Deadline passed
                           </span>
+                        )}
+                      </div>
+
+                      {isGroup && status.group && (
+                        <div className="mt-4 p-3 rounded-lg bg-canvas border border-border">
+                          <p className="text-sm font-medium">
+                            Group: {status.group.name || "Your group"}
+                          </p>
+
+                          <p className="text-xs text-muted mt-1">
+                            Leader: {status.leaderName}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="mt-4">
+                        <p
+                          className={`text-sm font-medium ${
+                            status.acknowledged
+                              ? "text-olive"
+                              : "text-terracotta"
+                          }`}
+                        >
+                          {status.acknowledged
+                            ? "✓ Acknowledged"
+                            : "○ Not acknowledged"}
+                        </p>
+
+                        <p className="text-xs text-muted mt-1">
+                          {status.message}
+                        </p>
+
+                        {status.acknowledgedAt && (
+                          <p className="text-xs text-muted mt-1">
+                            Acknowledged on:{" "}
+                            {formatAcknowledgement(
+                              status.acknowledgedAt
+                            )}
+                          </p>
                         )}
                       </div>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 shrink-0">
-                      <span
-                        className={`text-xs px-3 py-1.5 rounded-full ${
-                          isSubmitted
-                            ? "bg-olive/10 text-olive"
-                            : "bg-terracotta/10 text-terracotta"
-                        }`}
-                      >
-                        {isSubmitted ? "Submitted" : "Pending"}
-                      </span>
-
-                      {assignment.driveLink && (
+                      {assignment.oneDriveLink && (
                         <a
-                          href={assignment.driveLink}
+                          href={assignment.oneDriveLink}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-2 border border-border px-3 py-2 rounded-lg text-sm hover:bg-canvas"
@@ -255,12 +384,15 @@ function MyAssignmentsPage() {
                         </a>
                       )}
 
-                      {!isSubmitted && (
+                      {status.canAcknowledge && (
                         <button
-                          onClick={() => setSelectedAssignment(assignment)}
+                          type="button"
+                          onClick={() =>
+                            handleAcknowledge(assignment)
+                          }
                           className="px-4 py-2.5 bg-olive text-white text-sm font-medium rounded-lg hover:bg-olive-dark"
                         >
-                          Submit assignment
+                          Acknowledge
                         </button>
                       )}
                     </div>
@@ -271,13 +403,6 @@ function MyAssignmentsPage() {
           </div>
         )}
       </section>
-
-      <SubmissionModal
-        isOpen={Boolean(selectedAssignment)}
-        onClose={() => setSelectedAssignment(null)}
-        onConfirm={handleSubmission}
-        assignmentTitle={selectedAssignment?.title || ""}
-      />
     </DashboardLayout>
   );
 }

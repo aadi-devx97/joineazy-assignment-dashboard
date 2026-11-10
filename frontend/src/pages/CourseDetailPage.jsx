@@ -1,5 +1,5 @@
 
-import { useContext } from "react";
+import { useContext, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -8,6 +8,9 @@ import {
   ExternalLink,
   FileText,
   Users,
+  Crown,
+  UserPlus,
+  Plus,
 } from "lucide-react";
 
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -22,9 +25,14 @@ function CourseDetailPage() {
     users,
     assignments,
     groups,
+    setGroups,
   } = useContext(AppContext);
 
-  const isProfessor = currentUser.role === "professor";
+  const [groupName, setGroupName] = useState("");
+  const [success, setSuccess] = useState("");
+  const [error, setError] = useState("");
+
+  const isProfessor = currentUser?.role === "professor";
 
   const course = courses.find(
     (item) => item.id === courseId
@@ -63,6 +71,14 @@ function CourseDetailPage() {
     (group) => group.courseId === course.id
   );
 
+  const myGroup = courseGroups.find((group) =>
+    group.members?.includes(currentUser.id)
+  );
+
+  const getUserName = (userId) =>
+    users.find((user) => user.id === userId)?.name ||
+    "Unknown student";
+
   const backPath = isProfessor
     ? "/professor/courses"
     : "/student/courses";
@@ -70,6 +86,65 @@ function CourseDetailPage() {
   const assignmentPath = isProfessor
     ? "/professor/assignments"
     : "/student/assignments";
+
+  const handleCreateGroup = (event) => {
+    event.preventDefault();
+    setError("");
+    setSuccess("");
+
+    const trimmedName = groupName.trim();
+
+    if (!trimmedName) {
+      setError("Please enter a group name.");
+      return;
+    }
+
+    if (myGroup) {
+      setError("You already belong to a group in this course.");
+      return;
+    }
+
+    const newGroup = {
+      id: crypto.randomUUID(),
+      courseId: course.id,
+      name: trimmedName,
+      leaderId: currentUser.id,
+      members: [currentUser.id],
+      createdAt: new Date().toISOString(),
+    };
+
+    setGroups((previous) => [...previous, newGroup]);
+
+    setGroupName("");
+    setSuccess("Your group has been created successfully.");
+  };
+
+  const handleJoinGroup = (groupId) => {
+    setError("");
+    setSuccess("");
+
+    if (myGroup) {
+      setError("You already belong to a group in this course.");
+      return;
+    }
+
+    setGroups((previous) =>
+      previous.map((group) => {
+        if (group.id !== groupId) return group;
+
+        if (group.members?.includes(currentUser.id)) {
+          return group;
+        }
+
+        return {
+          ...group,
+          members: [...(group.members || []), currentUser.id],
+        };
+      })
+    );
+
+    setSuccess("You have successfully joined the group.");
+  };
 
   return (
     <DashboardLayout
@@ -175,6 +250,225 @@ function CourseDetailPage() {
                     <p className="text-xs text-muted truncate">
                       {student.email}
                     </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Group management */}
+      {!isProfessor && (
+        <section className="bg-surface border border-border rounded-xl p-5 mb-7">
+          <div className="mb-5">
+            <h3 className="font-semibold text-lg">
+              Course Groups
+            </h3>
+            <p className="text-sm text-muted mt-1">
+              Create a group or join an existing one for group assignments.
+            </p>
+          </div>
+
+          {success && (
+            <div
+              className="mb-4 p-3 rounded-lg bg-olive/10 text-olive text-sm"
+              role="status"
+            >
+              {success}
+            </div>
+          )}
+
+          {error && (
+            <div
+              className="mb-4 p-3 rounded-lg bg-terracotta/10 text-terracotta text-sm"
+              role="alert"
+            >
+              {error}
+            </div>
+          )}
+
+          {myGroup ? (
+            <div className="mb-6 p-4 border border-olive/30 rounded-xl bg-olive/5">
+              <div className="flex items-center gap-2 mb-3">
+                <Users size={19} className="text-olive" />
+                <h4 className="font-semibold">
+                  Your group: {myGroup.name}
+                </h4>
+              </div>
+
+              <p className="text-sm text-muted mb-4">
+                {myGroup.members?.length || 0} members
+              </p>
+
+              <div className="space-y-3">
+                {(myGroup.members || []).map((memberId) => {
+                  const isLeader = memberId === myGroup.leaderId;
+
+                  return (
+                    <div
+                      key={memberId}
+                      className="flex items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-terracotta/15 text-terracotta flex items-center justify-center font-semibold">
+                          {getUserName(memberId).charAt(0)}
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-medium">
+                            {getUserName(memberId)}
+                            {memberId === currentUser.id && " (You)"}
+                          </p>
+
+                          {isLeader && (
+                            <span className="text-xs text-olive font-medium">
+                              Group Leader
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {isLeader && (
+                        <Crown
+                          size={17}
+                          className="text-terracotta"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="mb-6">
+              <p className="text-sm font-medium mb-3">
+                You haven't joined a group yet.
+              </p>
+
+              <form
+                onSubmit={handleCreateGroup}
+                className="flex flex-col sm:flex-row gap-3"
+              >
+                <input
+                  type="text"
+                  value={groupName}
+                  onChange={(event) =>
+                    setGroupName(event.target.value)
+                  }
+                  placeholder="Enter a new group name"
+                  maxLength={40}
+                  className="flex-1 bg-canvas border border-border rounded-lg px-4 py-3 text-sm outline-none focus:border-olive"
+                />
+
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-olive text-white text-sm font-medium rounded-lg hover:bg-olive-dark"
+                >
+                  <Plus size={17} />
+                  Create group
+                </button>
+              </form>
+            </div>
+          )}
+
+          <div>
+            <h4 className="font-semibold text-sm mb-3">
+              {myGroup ? "Other groups" : "Available groups"}
+            </h4>
+
+            {courseGroups.filter(
+              (group) => group.id !== myGroup?.id
+            ).length === 0 ? (
+              <p className="text-sm text-muted py-3">
+                No other groups have been created in this course yet.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {courseGroups
+                  .filter((group) => group.id !== myGroup?.id)
+                  .map((group) => {
+                    const alreadyMember =
+                      group.members?.includes(currentUser.id);
+
+                    return (
+                      <div
+                        key={group.id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border border-border rounded-lg"
+                      >
+                        <div>
+                          <p className="font-medium text-sm">
+                            {group.name}
+                          </p>
+
+                          <p className="text-xs text-muted mt-1">
+                            Leader: {getUserName(group.leaderId)}
+                          </p>
+
+                          <p className="text-xs text-muted mt-1">
+                            {group.members?.length || 0} members
+                          </p>
+                        </div>
+
+                        {!myGroup && (
+                          <button
+                            type="button"
+                            onClick={() => handleJoinGroup(group.id)}
+                            disabled={alreadyMember}
+                            className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-canvas disabled:opacity-50"
+                          >
+                            <UserPlus size={16} />
+                            Join group
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Professor group overview */}
+      {isProfessor && (
+        <section className="bg-surface border border-border rounded-xl p-5 mb-7">
+          <h3 className="font-semibold text-lg mb-4">
+            Course Groups
+          </h3>
+
+          {courseGroups.length === 0 ? (
+            <p className="text-sm text-muted">
+              No student groups have been created yet.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {courseGroups.map((group) => (
+                <div
+                  key={group.id}
+                  className="p-4 border border-border rounded-lg"
+                >
+                  <h4 className="font-semibold">
+                    {group.name}
+                  </h4>
+
+                  <p className="text-xs text-muted mt-1">
+                    Leader: {getUserName(group.leaderId)}
+                  </p>
+
+                  <p className="text-xs text-muted mt-1">
+                    {group.members?.length || 0} members
+                  </p>
+
+                  <div className="mt-3 space-y-1">
+                    {(group.members || []).map((memberId) => (
+                      <p
+                        key={memberId}
+                        className="text-sm text-muted"
+                      >
+                        • {getUserName(memberId)}
+                      </p>
+                    ))}
                   </div>
                 </div>
               ))}

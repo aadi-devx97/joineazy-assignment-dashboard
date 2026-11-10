@@ -1,161 +1,132 @@
-import { useContext, useState } from "react";
+
+import { useContext, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ClipboardList,
   Users,
   CheckCircle2,
   Clock,
   Plus,
-  Pencil,
-  Trash2,
   ExternalLink,
 } from "lucide-react";
 
 import DashboardLayout from "../components/layout/DashboardLayout";
-import AssignmentModal from "../components/dashboard/AssignmentModal";
 import { AppContext } from "../context/AppContextDefinition";
-import { mockUsers } from "../data/mockData";
 
 function AdminDashboard() {
-  const { currentUser, assignments, setAssignments } =
-    useContext(AppContext);
+  const navigate = useNavigate();
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingAssignment, setEditingAssignment] = useState(null);
+  const {
+    currentUser,
+    courses,
+    assignments,
+    groups,
+  } = useContext(AppContext);
 
-  const students = mockUsers.filter(
-    (user) => user.role === "student"
+  const professorCourses = useMemo(
+    () =>
+      courses.filter(
+        (course) => course.professorId === currentUser.id
+      ),
+    [courses, currentUser]
   );
 
-  // Only show assignments created by this admin
-  const myAssignments = assignments.filter(
-    (assignment) => assignment.createdBy === currentUser.id
+  const courseIds = professorCourses.map((course) => course.id);
+
+  const students = useMemo(() => {
+    const studentIds = new Set(
+      professorCourses.flatMap(
+        (course) => course.studentIds || []
+      )
+    );
+
+    return studentIds;
+  }, [professorCourses]);
+
+  const myAssignments = useMemo(
+    () =>
+      assignments.filter(
+        (assignment) =>
+          assignment.professorId === currentUser.id
+      ),
+    [assignments, currentUser]
   );
 
-  const totalAssignments = myAssignments.length;
+  const getCourseName = (courseId) => {
+    const course = courses.find(
+      (item) => item.id === courseId
+    );
 
-  const totalSubmissions = myAssignments.reduce(
+    return course?.title || course?.name || "Unknown course";
+  };
+
+  const getAcknowledgedStudents = (assignment) => {
+    const acknowledgements = assignment.acknowledgements || {};
+
+    if (assignment.submissionType === "group") {
+      const courseGroups = groups.filter(
+        (group) => group.courseId === assignment.courseId
+      );
+
+      return courseGroups.reduce((total, group) => {
+        const acknowledged =
+          acknowledgements[group.id]?.acknowledged;
+
+        return total + (
+          acknowledged ? group.members?.length || 0 : 0
+        );
+      }, 0);
+    }
+
+    return Object.values(acknowledgements).filter(
+      (item) => item?.acknowledged
+    ).length;
+  };
+
+  const totalAcknowledged = myAssignments.reduce(
     (total, assignment) =>
-      total +
-      Object.values(assignment.submissions || {}).filter(
-        (submission) => submission.status === "submitted"
-      ).length,
+      total + getAcknowledgedStudents(assignment),
     0
   );
 
-  const pendingSubmissions = myAssignments.reduce(
-    (total, assignment) =>
-      total +
-      Object.values(assignment.submissions || {}).filter(
-        (submission) => submission.status === "pending"
-      ).length,
+  const totalExpected = myAssignments.reduce(
+    (total, assignment) => {
+      const course = courses.find(
+        (item) => item.id === assignment.courseId
+      );
+
+      return total + (course?.studentIds?.length || 0);
+    },
     0
+  );
+
+  const totalPending = Math.max(
+    0,
+    totalExpected - totalAcknowledged
   );
 
   const stats = [
     {
       label: "Total Assignments",
-      value: totalAssignments,
+      value: myAssignments.length,
       icon: ClipboardList,
     },
     {
       label: "Total Students",
-      value: students.length,
+      value: students.size,
       icon: Users,
     },
     {
-      label: "Submissions",
-      value: totalSubmissions,
+      label: "Acknowledged",
+      value: totalAcknowledged,
       icon: CheckCircle2,
     },
     {
-      label: "Pending Submissions",
-      value: pendingSubmissions,
+      label: "Pending Acknowledgements",
+      value: totalPending,
       icon: Clock,
     },
   ];
-
-  const handleCreate = () => {
-    setEditingAssignment(null);
-    setIsModalOpen(true);
-  };
-
-  const handleEdit = (assignment) => {
-    setEditingAssignment(assignment);
-    setIsModalOpen(true);
-  };
-
-  const handleSave = (formData) => {
-    if (editingAssignment) {
-      setAssignments((previous) =>
-        previous.map((assignment) => {
-          if (assignment.id !== editingAssignment.id) {
-            return assignment;
-          }
-
-          const updatedSubmissions = {};
-
-          formData.assignedTo.forEach((studentId) => {
-            updatedSubmissions[studentId] =
-              assignment.submissions?.[studentId] || {
-                status: "pending",
-                submittedAt: null,
-              };
-          });
-
-          return {
-            ...assignment,
-            ...formData,
-            submissions: updatedSubmissions,
-            updatedAt: new Date().toISOString(),
-          };
-        })
-      );
-    } else {
-      const submissions = {};
-
-      formData.assignedTo.forEach((studentId) => {
-        submissions[studentId] = {
-          status: "pending",
-          submittedAt: null,
-        };
-      });
-
-      const newAssignment = {
-        id: crypto.randomUUID(),
-        ...formData,
-        createdBy: currentUser.id,
-        createdAt: new Date().toISOString(),
-        submissions,
-      };
-
-      setAssignments((previous) => [
-        ...previous,
-        newAssignment,
-      ]);
-    }
-
-    setIsModalOpen(false);
-    setEditingAssignment(null);
-  };
-
-  // Delete assignment
-  const handleDelete = (assignmentId) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this assignment?"
-    );
-
-    if (!confirmed) return;
-
-    setAssignments((previous) =>
-      previous.filter(
-        (assignment) =>
-          !(
-            assignment.id === assignmentId &&
-            assignment.createdBy === currentUser.id
-          )
-      )
-    );
-  };
 
   return (
     <DashboardLayout
@@ -170,12 +141,13 @@ function AdminDashboard() {
           </h2>
 
           <p className="text-sm text-muted mt-1">
-            Keep track of assignments and student progress.
+            Keep track of your courses, assignments and student progress.
           </p>
         </div>
 
         <button
-          onClick={handleCreate}
+          type="button"
+          onClick={() => navigate("/professor/assignments")}
           className="inline-flex items-center justify-center gap-2 bg-olive text-white px-4 py-3 rounded-lg text-sm font-medium hover:bg-olive-dark transition-colors"
         >
           <Plus size={18} />
@@ -209,15 +181,15 @@ function AdminDashboard() {
         })}
       </section>
 
-      {/* Assignment management */}
+      {/* Assignment overview */}
       <section className="bg-surface border border-border rounded-xl overflow-hidden">
         <div className="p-5 border-b border-border">
           <h3 className="font-semibold text-lg">
-            Assignment Management
+            Assignment Overview
           </h3>
 
           <p className="text-sm text-muted mt-1">
-            Manage assignments and monitor individual student progress.
+            Monitor acknowledgement progress across your courses.
           </p>
         </div>
 
@@ -237,7 +209,8 @@ function AdminDashboard() {
             </p>
 
             <button
-              onClick={handleCreate}
+              type="button"
+              onClick={() => navigate("/professor/assignments")}
               className="mt-5 inline-flex items-center gap-2 bg-olive text-white px-4 py-2.5 rounded-lg text-sm hover:bg-olive-dark"
             >
               <Plus size={17} />
@@ -247,29 +220,41 @@ function AdminDashboard() {
         ) : (
           <div className="divide-y divide-border">
             {myAssignments.map((assignment) => {
-              const assignedStudents = students.filter(
-                (student) =>
-                  assignment.assignedTo?.includes(student.id)
+              const course = courses.find(
+                (item) => item.id === assignment.courseId
               );
 
-              const submittedCount = assignedStudents.filter(
-                (student) =>
-                  assignment.submissions?.[student.id]?.status ===
-                  "submitted"
-              ).length;
+              const totalStudents =
+                course?.studentIds?.length || 0;
 
-              const completionRate =
-                assignedStudents.length > 0
-                  ? Math.round(
-                      (submittedCount / assignedStudents.length) * 100
+              const acknowledged =
+                getAcknowledgedStudents(assignment);
+
+              const pending = Math.max(
+                0,
+                totalStudents - acknowledged
+              );
+
+              const progress = totalStudents
+                ? Math.min(
+                    100,
+                    Math.round(
+                      (acknowledged / totalStudents) * 100
                     )
-                  : 0;
+                  )
+                : 0;
+
+              const overdue =
+                new Date(assignment.deadline) < new Date();
 
               return (
                 <article key={assignment.id} className="p-5">
-                  {/* Assignment heading */}
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div className="min-w-0">
+                      <p className="text-xs font-semibold text-olive mb-2">
+                        {getCourseName(assignment.courseId)}
+                      </p>
+
                       <h4 className="font-semibold text-base">
                         {assignment.title}
                       </h4>
@@ -279,97 +264,59 @@ function AdminDashboard() {
                       </p>
 
                       <div className="flex flex-wrap items-center gap-3 mt-3 text-xs text-muted">
-                        <span>Due: {assignment.dueDate}</span>
-
                         <span>
-                          {assignedStudents.length} students assigned
+                          Deadline:{" "}
+                          {assignment.deadline
+                            ? new Date(
+                                assignment.deadline
+                              ).toLocaleString("en-IN")
+                            : "Not set"}
                         </span>
 
-                        <a
-                          href={assignment.driveLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-olive hover:underline"
-                        >
-                          Drive resource
-                          <ExternalLink size={13} />
-                        </a>
+                        <span>
+                          {assignment.submissionType === "group"
+                            ? "Group"
+                            : "Individual"}{" "}
+                          assignment
+                        </span>
+
+                        {overdue && (
+                          <span className="text-terracotta font-medium">
+                            Overdue
+                          </span>
+                        )}
+
+                        {assignment.oneDriveLink && (
+                          <a
+                            href={assignment.oneDriveLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-olive hover:underline"
+                          >
+                            Resource
+                            <ExternalLink size={13} />
+                          </a>
+                        )}
                       </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => handleEdit(assignment)}
-                        aria-label="Edit assignment"
-                        className="p-2 rounded-lg border border-border hover:bg-canvas"
-                      >
-                        <Pencil size={16} />
-                      </button>
-
-                      <button
-                        onClick={() => handleDelete(assignment.id)}
-                        aria-label="Delete assignment"
-                        className="p-2 rounded-lg border border-border text-terracotta hover:bg-terracotta/10"
-                      >
-                        <Trash2 size={16} />
-                      </button>
                     </div>
                   </div>
 
-                  {/* Completion rate */}
                   <div className="mt-5">
-                    <div className="flex justify-between text-sm mb-2">
+                    <div className="flex flex-wrap justify-between gap-2 text-sm mb-2">
                       <span className="text-muted">
-                        Class completion
+                        Student acknowledgement
                       </span>
 
                       <span className="font-medium">
-                        {submittedCount}/{assignedStudents.length} submitted
-                        ({completionRate}%)
+                        {acknowledged} acknowledged · {pending} pending
                       </span>
                     </div>
 
                     <div className="h-2 bg-border rounded-full overflow-hidden">
                       <div
                         className="h-full bg-olive rounded-full transition-all"
-                        style={{ width: `${completionRate}%` }}
+                        style={{ width: `${progress}%` }}
                       />
-                    </div>
-                  </div>
-
-                  {/* Individual student statuses */}
-                  <div className="mt-5 pt-4 border-t border-border">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted mb-3">
-                      Student submissions
-                    </p>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {assignedStudents.map((student) => {
-                        const isSubmitted =
-                          assignment.submissions?.[student.id]?.status ===
-                          "submitted";
-
-                        return (
-                          <div
-                            key={student.id}
-                            className="flex items-center justify-between gap-2 bg-canvas p-3 rounded-lg"
-                          >
-                            <span className="text-sm font-medium">
-                              {student.name}
-                            </span>
-
-                            <span
-                              className={`text-xs px-2 py-1 rounded-full ${
-                                isSubmitted
-                                  ? "bg-olive/10 text-olive"
-                                  : "bg-terracotta/10 text-terracotta"
-                              }`}
-                            >
-                              {isSubmitted ? "Submitted" : "Pending"}
-                            </span>
-                          </div>
-                        );
-                      })}
                     </div>
                   </div>
                 </article>
@@ -378,20 +325,6 @@ function AdminDashboard() {
           </div>
         )}
       </section>
-
-      {/* Assignment modal */}
-      {isModalOpen && (
-        <AssignmentModal
-            key={editingAssignment?.id || "new"}
-            isOpen={isModalOpen}
-            onClose={() => {
-            setIsModalOpen(false);
-            setEditingAssignment(null);
-            }}
-            onSave={handleSave}
-            editingAssignment={editingAssignment}
-        />
-      )}
     </DashboardLayout>
   );
 }

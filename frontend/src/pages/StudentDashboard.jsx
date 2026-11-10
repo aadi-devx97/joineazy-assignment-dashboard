@@ -1,64 +1,117 @@
-import { useContext, useState } from "react";
+
+import { useContext, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ClipboardList,
   CheckCircle2,
   Clock,
   ExternalLink,
+  Users,
+  User,
+  CalendarDays,
 } from "lucide-react";
 
 import DashboardLayout from "../components/layout/DashboardLayout";
-import SubmissionModal from "../components/dashboard/SubmissionModal";
 import { AppContext } from "../context/AppContextDefinition";
 
+function formatDeadline(value) {
+  if (!value) return "No deadline";
+
+  return new Date(value).toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
 function StudentDashboard() {
-  const { currentUser, assignments, setAssignments } =
-    useContext(AppContext);
+  const navigate = useNavigate();
 
-  const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const {
+    currentUser,
+    courses,
+    assignments,
+    groups,
+  } = useContext(AppContext);
 
-  // Only show assignments assigned to this student
-  const myAssignments = assignments.filter(
-    (assignment) =>
-      assignment.assignedTo?.includes(currentUser.id)
+  const enrolledCourses = useMemo(
+    () =>
+      courses.filter((course) =>
+        course.studentIds?.includes(currentUser.id)
+      ),
+    [courses, currentUser]
   );
 
-  const submittedCount = myAssignments.filter(
+  const courseIds = enrolledCourses.map((course) => course.id);
+
+  const myAssignments = useMemo(
+    () =>
+      assignments
+        .filter((assignment) =>
+          courseIds.includes(assignment.courseId)
+        )
+        .sort(
+          (a, b) =>
+            new Date(a.deadline) - new Date(b.deadline)
+        ),
+    [assignments, courseIds]
+  );
+
+  const getAcknowledgementInfo = (assignment) => {
+    const acknowledgements = assignment.acknowledgements || {};
+
+    if (assignment.submissionType !== "group") {
+      const acknowledgement = acknowledgements[currentUser.id];
+
+      return {
+        acknowledged: Boolean(acknowledgement?.acknowledged),
+        acknowledgedAt: acknowledgement?.acknowledgedAt,
+        message: acknowledgement?.acknowledged
+          ? "Acknowledged"
+          : "Pending acknowledgement",
+      };
+    }
+
+    const group = groups.find(
+      (item) =>
+        item.courseId === assignment.courseId &&
+        item.members?.includes(currentUser.id)
+    );
+
+    if (!group) {
+      return {
+        acknowledged: false,
+        message: "Join or create a group",
+      };
+    }
+
+    const acknowledgement = acknowledgements[group.id];
+
+    return {
+      acknowledged: Boolean(acknowledgement?.acknowledged),
+      acknowledgedAt: acknowledgement?.acknowledgedAt,
+      message: acknowledgement?.acknowledged
+        ? "Group acknowledged"
+        : group.leaderId === currentUser.id
+          ? "Your group acknowledgement is pending"
+          : "Waiting for group leader",
+      groupName: group.name,
+    };
+  };
+
+  const acknowledgedCount = myAssignments.filter(
     (assignment) =>
-      assignment.submissions?.[currentUser.id]?.status === "submitted"
+      getAcknowledgementInfo(assignment).acknowledged
   ).length;
 
-  const pendingCount = myAssignments.length - submittedCount;
+  const pendingCount =
+    myAssignments.length - acknowledgedCount;
 
   const progress =
     myAssignments.length > 0
-      ? Math.round((submittedCount / myAssignments.length) * 100)
+      ? Math.round(
+          (acknowledgedCount / myAssignments.length) * 100
+        )
       : 0;
-
-  // Confirm assignment submission
-  const handleSubmission = () => {
-    if (!selectedAssignment) return;
-
-    setAssignments((previous) =>
-      previous.map((assignment) => {
-        if (assignment.id !== selectedAssignment.id) {
-          return assignment;
-        }
-
-        return {
-          ...assignment,
-          submissions: {
-            ...assignment.submissions,
-            [currentUser.id]: {
-              status: "submitted",
-              submittedAt: new Date().toISOString(),
-            },
-          },
-        };
-      })
-    );
-
-    setSelectedAssignment(null);
-  };
 
   const stats = [
     {
@@ -67,8 +120,8 @@ function StudentDashboard() {
       icon: ClipboardList,
     },
     {
-      label: "Submitted",
-      value: submittedCount,
+      label: "Acknowledged",
+      value: acknowledgedCount,
       icon: CheckCircle2,
     },
     {
@@ -81,7 +134,7 @@ function StudentDashboard() {
   return (
     <DashboardLayout
       title="My Dashboard"
-      description="Your learning tasks, deadlines and submission progress."
+      description="Your learning tasks, deadlines and acknowledgement progress."
     >
       {/* Welcome */}
       <section className="mb-8">
@@ -90,7 +143,8 @@ function StudentDashboard() {
         </p>
 
         <h2 className="text-xl font-semibold">
-          Ready to get things done, {currentUser.name.split(" ")[0]}?
+          Ready to get things done,{" "}
+          {currentUser.name.split(" ")[0]}?
         </h2>
 
         <p className="text-sm text-muted mt-2">
@@ -109,24 +163,30 @@ function StudentDashboard() {
               className="bg-surface border border-border rounded-xl p-5"
             >
               <div className="flex justify-between items-center mb-5">
-                <p className="text-sm text-muted">{stat.label}</p>
+                <p className="text-sm text-muted">
+                  {stat.label}
+                </p>
                 <Icon size={20} className="text-olive" />
               </div>
 
-              <p className="text-3xl font-semibold">{stat.value}</p>
+              <p className="text-3xl font-semibold">
+                {stat.value}
+              </p>
             </div>
           );
         })}
       </section>
 
-      {/* Progress */}
+      {/* Overall progress */}
       <section className="bg-surface border border-border rounded-xl p-6 mb-8">
-        <div className="flex justify-between items-center mb-3">
+        <div className="flex justify-between items-center mb-3 gap-3">
           <div>
-            <h3 className="font-semibold">Your overall progress</h3>
+            <h3 className="font-semibold">
+              Your overall progress
+            </h3>
 
             <p className="text-sm text-muted mt-1">
-              {submittedCount} of {myAssignments.length} assignments completed
+              {acknowledgedCount} of {myAssignments.length} assignments acknowledged
             </p>
           </div>
 
@@ -141,7 +201,7 @@ function StudentDashboard() {
           aria-valuenow={progress}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-label="Assignment completion progress"
+          aria-label="Assignment acknowledgement progress"
         >
           <div
             className="h-full bg-olive rounded-full transition-all duration-500"
@@ -152,12 +212,24 @@ function StudentDashboard() {
 
       {/* Assignments */}
       <section className="bg-surface border border-border rounded-xl overflow-hidden">
-        <div className="p-5 border-b border-border">
-          <h3 className="text-lg font-semibold">My Assignments</h3>
+        <div className="p-5 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold">
+              My Assignments
+            </h3>
 
-          <p className="text-sm text-muted mt-1">
-            All assignments assigned to you.
-          </p>
+            <p className="text-sm text-muted mt-1">
+              Assignments from your enrolled courses.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => navigate("/student/assignments")}
+            className="text-sm font-medium text-olive hover:underline"
+          >
+            View all assignments
+          </button>
         </div>
 
         {myAssignments.length === 0 ? (
@@ -167,69 +239,99 @@ function StudentDashboard() {
               className="mx-auto text-muted mb-4"
             />
 
-            <h4 className="font-semibold">You're all caught up!</h4>
+            <h4 className="font-semibold">
+              You're all caught up!
+            </h4>
 
             <p className="text-sm text-muted mt-2">
-              No assignments have been assigned to you yet.
-              Check back later.
+              No assignments have been posted to your courses yet.
             </p>
           </div>
         ) : (
           <div className="divide-y divide-border">
             {myAssignments.map((assignment) => {
-              const isSubmitted =
-                assignment.submissions?.[currentUser.id]?.status ===
-                "submitted";
+              const course = courses.find(
+                (item) => item.id === assignment.courseId
+              );
+
+              const status = getAcknowledgementInfo(assignment);
+
+              const overdue =
+                new Date(assignment.deadline) < new Date();
 
               return (
                 <article
                   key={assignment.id}
-                  className="p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+                  className="p-5"
                 >
-                  <div className="min-w-0">
-                    <h4 className="font-semibold">
-                      {assignment.title}
-                    </h4>
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-olive mb-2">
+                        {course?.title || course?.name || "Course"}
+                      </p>
 
-                    <p className="text-sm text-muted mt-1">
-                      {assignment.description}
-                    </p>
+                      <h4 className="font-semibold">
+                        {assignment.title}
+                      </h4>
 
-                    <p className="text-xs text-muted mt-3">
-                      Due: {assignment.dueDate}
-                    </p>
-                  </div>
+                      <p className="text-sm text-muted mt-1">
+                        {assignment.description}
+                      </p>
 
-                  <div className="flex flex-wrap items-center gap-3 shrink-0">
-                    <span
-                      className={`text-xs px-3 py-1.5 rounded-full ${
-                        isSubmitted
-                          ? "bg-olive/10 text-olive"
-                          : "bg-terracotta/10 text-terracotta"
-                      }`}
-                    >
-                      {isSubmitted ? "Submitted" : "Pending"}
-                    </span>
+                      <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-muted">
+                        <span className="inline-flex items-center gap-1.5">
+                          <CalendarDays size={14} />
+                          {formatDeadline(assignment.deadline)}
+                        </span>
 
-                    {assignment.driveLink && (
+                        <span className="inline-flex items-center gap-1.5">
+                          {assignment.submissionType === "group" ? (
+                            <Users size={14} />
+                          ) : (
+                            <User size={14} />
+                          )}
+
+                          {assignment.submissionType === "group"
+                            ? "Group"
+                            : "Individual"}
+                        </span>
+
+                        {overdue && (
+                          <span className="text-terracotta font-semibold">
+                            Deadline passed
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-3">
+                        <span
+                          className={`text-xs font-medium ${
+                            status.acknowledged
+                              ? "text-olive"
+                              : "text-terracotta"
+                          }`}
+                        >
+                          {status.acknowledged
+                            ? "✓ Acknowledged"
+                            : "○ Pending acknowledgement"}
+                        </span>
+
+                        <p className="text-xs text-muted mt-1">
+                          {status.message}
+                        </p>
+                      </div>
+                    </div>
+
+                    {assignment.oneDriveLink && (
                       <a
-                        href={assignment.driveLink}
+                        href={assignment.oneDriveLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        aria-label="Open assignment resource"
-                        className="w-9 h-9 flex items-center justify-center border border-border rounded-lg hover:bg-canvas"
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-border rounded-lg text-sm hover:bg-canvas shrink-0"
                       >
-                        <ExternalLink size={17} />
+                        Open resource
+                        <ExternalLink size={15} />
                       </a>
-                    )}
-
-                    {!isSubmitted && (
-                      <button
-                        onClick={() => setSelectedAssignment(assignment)}
-                        className="px-4 py-2.5 bg-olive text-white text-sm font-medium rounded-lg hover:bg-olive-dark transition-colors"
-                      >
-                        Yes, I have submitted
-                      </button>
                     )}
                   </div>
                 </article>
@@ -238,14 +340,6 @@ function StudentDashboard() {
           </div>
         )}
       </section>
-
-      {/* Submission confirmation modal */}
-      <SubmissionModal
-        isOpen={Boolean(selectedAssignment)}
-        onClose={() => setSelectedAssignment(null)}
-        onConfirm={handleSubmission}
-        assignmentTitle={selectedAssignment?.title || ""}
-      />
     </DashboardLayout>
   );
 }

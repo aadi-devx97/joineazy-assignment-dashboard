@@ -11,12 +11,13 @@ import { AppContext } from "./context/AppContextDefinition";
 
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
-
 import AdminDashboard from "./pages/AdminDashboard";
 import StudentDashboard from "./pages/StudentDashboard";
 import StudentsPage from "./pages/StudentsPage";
-import AssignmentsPage from "./pages/AssignmentsPage";
 import MyAssignmentsPage from "./pages/MyAssignmentsPage";
+import CoursesPage from "./pages/CoursesPage";
+import CourseDetailPage from "./pages/CourseDetailPage";
+import ProfessorAssignmentsPage from "./pages/ProfessorAssignmentsPage";
 
 // Protect routes according to the user's role.
 function ProtectedRoute({ allowedRole, children }) {
@@ -50,13 +51,12 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Default route */}
         <Route
           path="/"
           element={<Navigate to={dashboardPath} replace />}
         />
 
-        {/* Login */}
+        {/* Authentication */}
         <Route
           path="/login"
           element={
@@ -68,7 +68,6 @@ function App() {
           }
         />
 
-        {/* Registration */}
         <Route
           path="/register"
           element={
@@ -91,10 +90,28 @@ function App() {
         />
 
         <Route
+          path="/professor/courses"
+          element={
+            <ProtectedRoute allowedRole="professor">
+              <CoursesPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/professor/courses/:courseId"
+          element={
+            <ProtectedRoute allowedRole="professor">
+              <CourseDetailPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/professor/assignments"
           element={
             <ProtectedRoute allowedRole="professor">
-              <AssignmentsPage />
+              <ProfessorAssignmentsPage />
             </ProtectedRoute>
           }
         />
@@ -114,6 +131,24 @@ function App() {
           element={
             <ProtectedRoute allowedRole="student">
               <StudentDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/student/courses"
+          element={
+            <ProtectedRoute allowedRole="student">
+              <CoursesPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/student/courses/:courseId"
+          element={
+            <ProtectedRoute allowedRole="student">
+              <CourseDetailPage />
             </ProtectedRoute>
           }
         />

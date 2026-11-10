@@ -13,7 +13,7 @@ import {
 import { AppContext } from "../context/AppContextDefinition";
 
 function RegisterPage() {
-  const { register, login } = useContext(AppContext);
+  const { register } = useContext(AppContext);
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -79,11 +79,7 @@ function RegisterPage() {
 
     setSuccess(true);
 
-    const loginResult = login(result.user.id);
-
-    if (loginResult.success) {
-      navigate(role === "professor" ? "/professor" : "/student");
-    }
+    navigate(role === "professor" ? "/professor" : "/student");
   };
 
   return (

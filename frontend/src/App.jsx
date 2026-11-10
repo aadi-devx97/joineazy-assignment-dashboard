@@ -10,6 +10,8 @@ import {
 import { AppContext } from "./context/AppContextDefinition";
 
 import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+
 import AdminDashboard from "./pages/AdminDashboard";
 import StudentDashboard from "./pages/StudentDashboard";
 import StudentsPage from "./pages/StudentsPage";
@@ -62,6 +64,18 @@ function App() {
               <Navigate to={dashboardPath} replace />
             ) : (
               <LoginPage />
+            )
+          }
+        />
+
+        {/* Registration */}
+        <Route
+          path="/register"
+          element={
+            currentUser ? (
+              <Navigate to={dashboardPath} replace />
+            ) : (
+              <RegisterPage />
             )
           }
         />

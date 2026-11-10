@@ -8,21 +8,16 @@ import {
   initialGroups,
 } from "../data/mockData";
 
-// Safely read data from localStorage.
 function readStorage(key, fallback) {
   try {
     const savedData = localStorage.getItem(key);
-
-    if (!savedData) return fallback;
-
-    return JSON.parse(savedData);
+    return savedData ? JSON.parse(savedData) : fallback;
   } catch (error) {
     console.error(`Failed to read ${key}:`, error);
     return fallback;
   }
 }
 
-// Safely persist data to localStorage.
 function writeStorage(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
@@ -33,18 +28,28 @@ function writeStorage(key, value) {
   }
 }
 
-// Create a simulated session token for this mock application.
 function createSessionToken(userId) {
   return `mock-token-${userId}-${Date.now()}`;
 }
 
 export function AppProvider({ children }) {
-  // Users include the seeded demo accounts and newly registered users.
-  const [users, setUsers] = useState(() =>
-    readStorage("joineazy-v2-users", mockUsers)
-  );
+  // Load users and migrate older demo accounts.
+  const [users, setUsers] = useState(() => {
+    const savedUsers = readStorage("joineazy-v2-users", null);
 
-  // Restore the previously authenticated session.
+    if (!savedUsers) {
+      return mockUsers.map((user) => ({
+        ...user,
+        password: "Demo123!",
+      }));
+    }
+
+    return savedUsers.map((user) => ({
+      ...user,
+      password: user.password || "Demo123!",
+    }));
+  });
+
   const [session, setSession] = useState(() =>
     readStorage("joineazy-v2-session", null)
   );
@@ -52,22 +57,18 @@ export function AppProvider({ children }) {
   const currentUser =
     users.find((user) => user.id === session?.userId) || null;
 
-  // Course data.
   const [courses, setCourses] = useState(() =>
     readStorage("joineazy-v2-courses", mockCourses)
   );
 
-  // Assignment data.
   const [assignments, setAssignments] = useState(() =>
     readStorage("joineazy-v2-assignments", initialAssignments)
   );
 
-  // Student groups.
   const [groups, setGroups] = useState(() =>
     readStorage("joineazy-v2-groups", initialGroups)
   );
 
-  // Persist application data whenever it changes.
   useEffect(() => {
     writeStorage("joineazy-v2-users", users);
   }, [users]);
@@ -88,17 +89,8 @@ export function AppProvider({ children }) {
     writeStorage("joineazy-v2-groups", groups);
   }, [groups]);
 
-  // Log in using a selected account.
-  const login = (userId) => {
-    const user = users.find((item) => item.id === userId);
-
-    if (!user) {
-      return {
-        success: false,
-        error: "Account not found.",
-      };
-    }
-
+  // Create a session for an authenticated user.
+  const startSession = (user) => {
     const newSession = {
       userId: user.id,
       token: createSessionToken(user.id),
@@ -106,6 +98,31 @@ export function AppProvider({ children }) {
     };
 
     setSession(newSession);
+  };
+
+  // Authenticate using email and password.
+  const login = (email, password) => {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || !password) {
+      return {
+        success: false,
+        error: "Please enter your email and password.",
+      };
+    }
+
+    const user = users.find(
+      (item) => item.email.toLowerCase() === normalizedEmail
+    );
+
+    if (!user || user.password !== password) {
+      return {
+        success: false,
+        error: "Invalid email or password.",
+      };
+    }
+
+    startSession(user);
 
     return {
       success: true,
@@ -115,7 +132,15 @@ export function AppProvider({ children }) {
 
   // Register a new student or professor.
   const register = ({ name, email, password, role }) => {
+    const normalizedName = name.trim();
     const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedName || !normalizedEmail || !password) {
+      return {
+        success: false,
+        error: "Please complete all required fields.",
+      };
+    }
 
     if (
       users.some(
@@ -135,9 +160,16 @@ export function AppProvider({ children }) {
       };
     }
 
+    if (password.length < 8) {
+      return {
+        success: false,
+        error: "Password must contain at least 8 characters.",
+      };
+    }
+
     const newUser = {
       id: `${role}-${Date.now()}`,
-      name: name.trim(),
+      name: normalizedName,
       email: normalizedEmail,
       password,
       role,
@@ -145,13 +177,15 @@ export function AppProvider({ children }) {
 
     setUsers((previousUsers) => [...previousUsers, newUser]);
 
+    // Registration also creates the user's session.
+    startSession(newUser);
+
     return {
       success: true,
       user: newUser,
     };
   };
 
-  // Clear the simulated authentication session.
   const logout = () => {
     setSession(null);
   };

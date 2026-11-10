@@ -4,32 +4,47 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   GraduationCap,
-  BookOpen,
-  UserRound,
+  Mail,
+  LockKeyhole,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 import { AppContext } from "../context/AppContextDefinition";
 
 function LoginPage() {
-  const { users, login } = useContext(AppContext);
+  const { login } = useContext(AppContext);
   const navigate = useNavigate();
 
-  const [selectedUser, setSelectedUser] = useState("student-1");
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
+
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
-  const professors = users.filter(
-    (user) => user.role === "professor"
-  );
+  const handleChange = (event) => {
+    const { name, value } = event.target;
 
-  const students = users.filter(
-    (user) => user.role === "student"
-  );
+    setFormData((previousData) => ({
+      ...previousData,
+      [name]: value,
+    }));
+
+    setError("");
+  };
 
   const handleLogin = (event) => {
     event.preventDefault();
     setError("");
 
-    const result = login(selectedUser);
+    if (!formData.email.trim() || !formData.password) {
+      setError("Please enter your email and password.");
+      return;
+    }
+
+    const result = login(formData.email, formData.password);
 
     if (!result.success) {
       setError(result.error);
@@ -37,15 +52,11 @@ function LoginPage() {
     }
 
     navigate(
-      result.user.role === "professor" ? "/professor" : "/student"
+      result.user.role === "professor"
+        ? "/professor"
+        : "/student"
     );
   };
-
-  const selectedAccount = users.find(
-    (user) => user.id === selectedUser
-  );
-
-  const isProfessor = selectedAccount?.role === "professor";
 
   return (
     <main className="min-h-screen bg-canvas flex items-center justify-center px-5 py-12">
@@ -78,84 +89,128 @@ function LoginPage() {
             </h2>
 
             <p className="text-muted text-sm mt-2">
-              Select a demo account to explore the platform.
+              Enter your account details to access your dashboard.
             </p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-5">
+
+            {/* Email */}
             <div>
               <label
-                htmlFor="demo-user"
+                htmlFor="email"
                 className="block text-sm font-medium mb-2"
               >
-                Select your account
+                Email address
               </label>
 
-              <select
-                id="demo-user"
-                value={selectedUser}
-                onChange={(event) =>
-                  setSelectedUser(event.target.value)
-                }
-                className="w-full bg-canvas border border-border rounded-lg px-4 py-3 text-sm outline-none focus:border-olive transition-colors"
+              <div className="relative">
+                <Mail
+                  size={18}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+                />
+
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                  className="w-full bg-canvas border border-border rounded-lg pl-10 pr-4 py-3 text-sm outline-none focus:border-olive transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* Password */}
+            <div>
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium mb-2"
               >
-                <optgroup label="Professors">
-                  {professors.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name}
-                    </option>
-                  ))}
-                </optgroup>
+                Password
+              </label>
 
-                <optgroup label="Students">
-                  {students.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name}
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
-            </div>
+              <div className="relative">
+                <LockKeyhole
+                  size={18}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+                />
 
-            {/* Selected account information */}
-            <div className="flex items-center gap-3 p-3 bg-canvas rounded-lg border border-border">
-              <div className="w-9 h-9 rounded-full bg-olive/15 text-olive flex items-center justify-center">
-                {isProfessor ? (
-                  <BookOpen size={19} />
-                ) : (
-                  <UserRound size={19} />
-                )}
-              </div>
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  placeholder="Enter your password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                  className="w-full bg-canvas border border-border rounded-lg pl-10 pr-11 py-3 text-sm outline-none focus:border-olive transition-colors"
+                />
 
-              <div>
-                <p className="text-xs text-muted">
-                  Account type
-                </p>
-
-                <p className="text-sm font-medium capitalize">
-                  {selectedAccount?.role || "Select an account"}
-                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((previous) => !previous)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink"
+                >
+                  {showPassword ? (
+                    <EyeOff size={18} />
+                  ) : (
+                    <Eye size={18} />
+                  )}
+                </button>
               </div>
             </div>
 
+            {/* Error message */}
             {error && (
               <p
                 role="alert"
-                className="text-sm text-red-600"
+                className="text-sm text-red-600 bg-red-50 rounded-lg p-3"
               >
                 {error}
               </p>
             )}
 
+            {/* Submit */}
             <button
               type="submit"
               className="w-full flex items-center justify-center gap-2 bg-olive hover:bg-olive-dark text-white font-medium py-3 rounded-lg transition-colors"
             >
-              Continue to dashboard
+              Sign in
               <ArrowRight size={18} />
             </button>
           </form>
 
+          {/* Demo credentials */}
+          <div className="mt-6 p-4 bg-canvas border border-border rounded-lg">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted mb-3">
+              Demo accounts
+            </p>
+
+            <div className="space-y-2 text-sm">
+              <p>
+                <span className="font-medium">Professor:</span>{" "}
+                alex@joineazy.com
+              </p>
+
+              <p>
+                <span className="font-medium">Student:</span>{" "}
+                aarav@student.com
+              </p>
+
+              <p>
+                <span className="font-medium">Password:</span>{" "}
+                Demo123!
+              </p>
+            </div>
+          </div>
+
+          {/* Registration link */}
           <div className="mt-6 pt-5 border-t border-border text-center">
             <p className="text-sm text-muted">
               New to Joineazy?{" "}

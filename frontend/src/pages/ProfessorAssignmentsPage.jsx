@@ -40,6 +40,7 @@ function ProfessorAssignmentsPage() {
     assignments,
     setAssignments,
     groups,
+    users,
   } = useContext(AppContext);
 
   const [showForm, setShowForm] = useState(false);
@@ -47,6 +48,7 @@ function ProfessorAssignmentsPage() {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [expandedAssignmentId, setExpandedAssignmentId] = useState(null);
 
   const professorCourses = useMemo(
     () =>
@@ -97,6 +99,44 @@ function ProfessorAssignmentsPage() {
     return Object.values(acknowledgements).filter(
       (item) => item?.acknowledged
     ).length;
+  };
+
+  const getStudentStatuses = (assignment) => {
+    const course = getCourse(assignment.courseId);
+    const acknowledgements = assignment.acknowledgements || {};
+
+    return (course?.studentIds || []).map((studentId) => {
+      const student = users.find((user) => user.id === studentId);
+
+      if (assignment.submissionType === "group") {
+        const group = groups.find(
+          (item) =>
+            item.courseId === assignment.courseId &&
+            item.members?.includes(studentId)
+        );
+
+        const acknowledgement = group
+          ? acknowledgements[group.id]
+          : null;
+
+        return {
+          id: studentId,
+          name: student?.name || "Unknown student",
+          groupName: group?.name || "Not in a group",
+          acknowledged: Boolean(acknowledgement?.acknowledged),
+          acknowledgedAt: acknowledgement?.acknowledgedAt,
+        };
+      }
+
+      const acknowledgement = acknowledgements[studentId];
+
+      return {
+        id: studentId,
+        name: student?.name || "Unknown student",
+        acknowledged: Boolean(acknowledgement?.acknowledged),
+        acknowledgedAt: acknowledgement?.acknowledgedAt,
+      };
+    });
   };
 
   const openCreateForm = () => {
@@ -389,6 +429,85 @@ function ProfessorAssignmentsPage() {
                       style={{ width: `${progress}%` }}
                     />
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedAssignmentId(
+                        expandedAssignmentId === assignment.id
+                          ? null
+                          : assignment.id
+                      )
+                    }
+                    className="mt-4 text-sm font-medium text-olive hover:underline"
+                  >
+                    {expandedAssignmentId === assignment.id
+                      ? "Hide student details"
+                      : "View student details"}
+                  </button>
+
+                  {expandedAssignmentId === assignment.id && (
+                    <div className="mt-4 border border-border rounded-lg overflow-hidden">
+                      <div className="p-4 bg-canvas flex flex-wrap justify-between gap-2">
+                        <h4 className="font-semibold text-sm">
+                          Student acknowledgement status
+                        </h4>
+                        <span className="text-xs text-muted">
+                          {acknowledged} acknowledged · {totalStudents - acknowledged} pending
+                        </span>
+                      </div>
+
+                      <div className="divide-y divide-border">
+                        {getStudentStatuses(assignment).map((student) => (
+                          <div
+                            key={student.id}
+                            className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+                          >
+                            <div>
+                              <p className="text-sm font-medium">
+                                {student.name}
+                              </p>
+
+                              {assignment.submissionType === "group" && (
+                                <p className="text-xs text-muted mt-1">
+                                  Group: {student.groupName}
+                                </p>
+                              )}
+
+                              {student.acknowledgedAt && (
+                                <p className="text-xs text-muted mt-1">
+                                  Acknowledged:{" "}
+                                  {new Date(student.acknowledgedAt).toLocaleString("en-IN", {
+                                    dateStyle: "medium",
+                                    timeStyle: "short",
+                                  })}
+                                </p>
+                              )}
+                            </div>
+
+                            <span
+                              className={`text-xs font-semibold ${
+                                student.acknowledged
+                                  ? "text-olive"
+                                  : "text-terracotta"
+                              }`}
+                            >
+                              {student.acknowledged
+                                ? "✓ Acknowledged"
+                                : "○ Pending"}
+                            </span>
+                          </div>
+                        ))}
+
+                        {totalStudents === 0 && (
+                          <p className="p-4 text-sm text-muted">
+                            No students are enrolled in this course yet.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
 
                   {overdue && (
                     <p className="inline-flex items-center gap-2 mt-3 text-xs font-medium text-terracotta">

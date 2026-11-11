@@ -1,5 +1,6 @@
 
 import { useContext, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   ClipboardList,
   ExternalLink,
@@ -43,6 +44,7 @@ function MyAssignmentsPage() {
 
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+  const [pendingAssignment, setPendingAssignment] = useState(null);
 
   const enrolledCourses = useMemo(
     () =>
@@ -355,10 +357,25 @@ function MyAssignmentsPage() {
                             ? "✓ Acknowledged"
                             : "○ Not acknowledged"}
                         </p>
+                        
+                        {isGroup && !status.group ? (
+                          <div className="mt-3 p-4 rounded-lg border border-border bg-canvas">
+                            <p className="text-sm text-muted">
+                              You are not part of any group. Create or join one to submit this assignment.
+                            </p>
 
-                        <p className="text-xs text-muted mt-1">
-                          {status.message}
-                        </p>
+                            <Link
+                              to={`/student/courses/${assignment.courseId}`}
+                              className="inline-flex items-center gap-2 mt-3 px-4 py-2.5 bg-olive text-white text-sm font-medium rounded-lg hover:bg-olive-dark"
+                            >
+                              Create or Join a Group
+                            </Link>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted mt-1">
+                            {status.message}
+                          </p>
+                        )}
 
                         {status.acknowledgedAt && (
                           <p className="text-xs text-muted mt-1">
@@ -387,9 +404,8 @@ function MyAssignmentsPage() {
                       {status.canAcknowledge && (
                         <button
                           type="button"
-                          onClick={() =>
-                            handleAcknowledge(assignment)
-                          }
+                          onClick={() => setPendingAssignment(assignment)}
+
                           className="px-4 py-2.5 bg-olive text-white text-sm font-medium rounded-lg hover:bg-olive-dark"
                         >
                           Acknowledge
@@ -403,6 +419,57 @@ function MyAssignmentsPage() {
           </div>
         )}
       </section>
+
+      {pendingAssignment && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+          <div
+            className="w-full max-w-md bg-surface border border-border rounded-xl shadow-xl p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="acknowledgement-title"
+          >
+            <h2
+              id="acknowledgement-title"
+              className="text-lg font-semibold"
+            >
+              Confirm Submission Acknowledgement
+            </h2>
+
+            <p className="text-sm text-muted mt-3">
+              Are you sure you have submitted the assignment{" "}
+              <strong>{pendingAssignment.title}</strong>?
+            </p>
+
+            <p className="text-xs text-muted mt-2">
+              {pendingAssignment.submissionType === "group"
+                ? "This will acknowledge the assignment for your entire group."
+                : "This action will record your acknowledgement."}
+            </p>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setPendingAssignment(null)}
+                className="px-4 py-2.5 border border-border rounded-lg text-sm hover:bg-canvas"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  handleAcknowledge(pendingAssignment);
+                  setPendingAssignment(null);
+                }}
+                className="px-4 py-2.5 bg-olive text-white rounded-lg text-sm font-medium hover:bg-olive-dark"
+              >
+                Yes, I have submitted
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </DashboardLayout>
   );
 }
